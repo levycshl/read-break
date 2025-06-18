@@ -1,0 +1,28 @@
+pipeline:
+  - id: match_r1_s1
+    read: 1
+    op: match
+    ref: "GGGTAC"
+    hamming_fn: hamming
+    max_wobble: 5
+    max_mismatch: 0
+    store_pos_as: s1_start
+    must_pass: true
+
+  - id: extract_tag
+    read: 1
+    op: extract
+    start: "{{ s1_start + 6 }}"
+    length: 4
+    store_seq_as: tag
+    must_pass: true
+
+  - id: check_flank_r1
+    read: 1
+    op: hamming_test
+    ref: "CTAG"
+    start: "{{ s1_start + 6 }}"
+    length: 4
+    hamming_fn: hamming
+    max_mismatch: 0
+    must_pass: false

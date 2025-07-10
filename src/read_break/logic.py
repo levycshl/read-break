@@ -1,4 +1,6 @@
 from operator import ne
+from collections.abc import Mapping
+
 
 """
 Low-level sequence logic for read-break.
@@ -107,8 +109,21 @@ def wobble_match(
     """
     for offset in range(base_offset, base_offset + max_wobble + 1):
         test_substring = test[offset:(offset + len(target))]
+        hval = hamming_func(target, test_substring)
         if len(test_substring) != len(target):
-            continue
-        if hamming_func(test_substring, target) <= max_hamming:
+            break
+        if hamming_func(target, test_substring) <= max_hamming:
             return offset - base_offset
     return -1
+
+
+def flatten_dot(d: Mapping, prefix: str = "", sep: str = ".") -> dict[str, object]:
+    """Return a flat dict: {'a.b.c': value, ...}"""
+    flat = {}
+    for k, v in d.items():
+        path = f"{prefix}{sep}{k}" if prefix else k
+        if isinstance(v, Mapping):
+            flat.update(flatten_dot(v, path, sep=sep))
+        else:
+            flat[path] = v
+    return flat

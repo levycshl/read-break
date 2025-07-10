@@ -340,7 +340,7 @@ class ReadParser:
         hamming_fn = HAMMING_FUNCS[hamming_fn_name]
 
         target_seq = seq[start:start + length]
-        distance = hamming_fn(target_seq, ref)
+        distance = hamming_fn(ref, target_seq)        
         result = distance <= max_mismatch
         
         # Store boolean result under custom name or step ID

@@ -1,0 +1,7 @@
+notebooks/parsed_output/DB1_S3.parquet
+notebooks/parsed_output/DB2_S4.parquet
+notebooks/parsed_output/DB3_S5.parquet
+notebooks/parsed_output/DB4_S6.parquet
+notebooks/parsed_output/DB5_S7.parquet
+notebooks/parsed_output/DB6_S8.parquet
+src/read_break/__pycache__/

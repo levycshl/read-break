@@ -45,6 +45,9 @@ def seq_to_int(seq: str) -> List[int]:
     return [BASE2INT[base] for base in seq]
 
 
+
+
+
 def hamming(x: str, y: str) -> int:
     """
     Computes the Hamming distance between two equal-length strings.

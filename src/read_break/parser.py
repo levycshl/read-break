@@ -9,6 +9,17 @@ from read_break.registry import HAMMING_FUNCS
 from read_break.io import FastqReader, FastqWriter
 import re
 
+from functools import lru_cache
+import ast
+from jinja2 import Environment, StrictUndefined, meta
+
+ENV = Environment(undefined=StrictUndefined)   # module-level – create once
+
+@lru_cache(maxsize=None)        # key = literal template string
+def _compile(template: str):
+    return ENV.from_string(template)
+
+
 class ReadParser:
     """
     Core engine for executing a declarative read-parsing pipeline.
@@ -17,6 +28,7 @@ class ReadParser:
     which operates on a FASTQ read (read 1 or read 2), and stores intermediate results
     in a shared context for later steps to use.
     """
+    
 
     def __init__(self, pipeline_cfg: Dict[str, Any], globals_cfg: Optional[Dict[str, Any]] = None, 
                  globals_namespace: str = "params", base_dir: Optional[str] = None):
@@ -24,7 +36,8 @@ class ReadParser:
         self.steps = pipeline_cfg["pipeline"]
 
         # Jinja environment to render dynamic expressions from context (e.g., {{ s1_start + 15 }})
-        self.env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        #self.env = jinja2.Environment(undefined=jinja2.StrictUndefined)
+        ## declared the Jinja environment at the module level # getting rid of self.env
 
         # Optional global constants (e.g. LT_LEN, sequences) passed in as 'cfg'
         
@@ -43,6 +56,25 @@ class ReadParser:
         
         # Initialize parse log
         self.reset_parse_log()
+
+        ## Freeze constants that reference only globals
+        self._freeze_constants()
+
+    def _freeze_constants(self) -> None:
+        """
+        Render any step-field that references **only** global params
+        (i.e. does not depend on per-read context) exactly **once**.
+        """
+        for step in self.steps:
+            for k, v in list(step.items()):
+                if isinstance(v, str) and "{{" in v:
+                    # Which variables does this template use?
+                    ast_ = ENV.parse(v)
+                    undeclared = meta.find_undeclared_variables(ast_)
+
+                    # If all vars are from the globals namespace, it's constant
+                    if undeclared <= {self.globals_namespace}:
+                        step[k] = self._render(v, {self.globals_namespace: self.globals})
 
     def _load_regex_patterns(self) -> None:
         """Load regex patterns from the globals configuration."""
@@ -109,22 +141,24 @@ class ReadParser:
                     self.globals[key] = rendered
                     changed = True
 
-    def _render(self, template_str: Any, context: Dict[str, Any]) -> Any:
+    def _render(self, template_like: Any, ctx: Dict[str, Any]) -> Any:
         """
-        Render Jinja templated strings using the provided context.
-        If the field is not a template, return the literal value unchanged.
+        Fast, safe rendering:
+        • non-strings      → return as-is
+        • plain strings    → return as-is
+        • Jinja templates  → compile once (LRU), render every call
+        • result           → literal-eval if it looks like a Python literal,
+                            otherwise return the rendered string verbatim.
+        """
+        if not (isinstance(template_like, str) and "{{" in template_like):
+            return template_like
 
-        Template context includes:
-          - all previously computed step outputs
-          - globals (accessible as self.globals_namespace.X)
-        """
-        if isinstance(template_str, str) and "{{" in template_str:
-            rendered = self.env.from_string(template_str).render(**context)
-            try:
-                return eval(rendered)  # Evaluate as Python expression (number or string)
-            except Exception:
-                return rendered  # fallback: treat as literal string
-        return template_str
+        rendered = _compile(template_like).render(**ctx)
+        try:
+            return ast.literal_eval(rendered)  # safe numbers / lists / dicts / bools
+        except (ValueError, SyntaxError):
+            return rendered      # leave non-literal strings untouched
+
 
     def _get_param(self, step: Dict[str, Any], param_name: str, context: Dict[str, Any], 
                    default: Any = None, convert_type: Optional[Callable] = None) -> Any:

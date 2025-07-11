@@ -63,7 +63,7 @@ pipeline:
     op: match
     ref: "{{ params.r1_seq3 }}"
     hamming_fn: hammingTC
-    max_wobble: 50
+    max_wobble: "{{ params.max_repeat_len }}"
     max_mismatch: 1
     base_offset: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len + params.r1_seq2_len }}"
     length: "{{ params.r1_seq3_len }}"

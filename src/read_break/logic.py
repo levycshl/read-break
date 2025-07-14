@@ -30,9 +30,9 @@ def reverse_complement(seq: str) -> str:
     Returns:
         str: The reverse complement of the input sequence
     """
-    return "".join([INDICT[base] for base in seq[::-1]])
+    return "".join([INDICT[base] if base in INDICT else base for base in seq[::-1]])
 
-def seq_to_int(seq: str) -> List[int]:
+def seq_to_int(seq: str, base2int: dict = BASE2INT) -> List[int]:
     """
     Converts a nucleotide sequence into a list of integer indices.
 
@@ -42,7 +42,7 @@ def seq_to_int(seq: str) -> List[int]:
     Returns:
         List[int]: List of integer-encoded bases, using BASE2INT mapping.
     """
-    return [BASE2INT[base] for base in seq]
+    return [base2int[base] for base in seq]
 
 
 

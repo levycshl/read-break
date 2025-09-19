@@ -7,6 +7,7 @@ from read_break.parser import ReadParser
 # Read 1 is not used in this test. Read 2 contains a target for match + flank check.
 read1 = "NNNGGGTACCTAG"
 read2 = "AAAGGGTTTTCCGGG"  # 'TTTTCC' is expected to be checked with hamming
+read3 = "AAAGGGTTTTTTGGG"  # 'TTTTTT' has too many mismatches vs. 'TTTTCC' but not with hammingTC
 
 # Define a 2-step pipeline:
 # 1. Match "AAAGGG" in read2 (at position 0)
@@ -31,6 +32,17 @@ pipeline_cfg = {
             "start": "{{ s2_start + 6 }}",  # This evaluates to 6
             "length": 6,
             "hamming_fn": "hamming",
+            "max_mismatch": 1,
+            "must_pass": False
+        },
+        {
+            "id": "check_flank_TC",
+            "read": 2,
+            "op": "match",
+            "ref": "TTTTCC",
+            "hamming_fn": "hammingTC",
+            "start": "{{ s2_start + 6 }}",  # This evaluates to 6
+            "length": 6,
             "max_mismatch": 1,
             "must_pass": True
         }

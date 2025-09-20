@@ -1,4 +1,6 @@
-# Entry point for read-break console script
+"""
+Entry point for python -m read_break.cli
+"""
 
 from read_break.cli import main
 

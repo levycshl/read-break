@@ -6,6 +6,7 @@ src/read_break/__init__.py
 src/read_break/io.py
 src/read_break/logic.py
 src/read_break/parser.py
+src/read_break/plot.py
 src/read_break/registry.py
 src/read_break.egg-info/PKG-INFO
 src/read_break.egg-info/SOURCES.txt

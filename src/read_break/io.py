@@ -42,6 +42,14 @@ class FastqWriter:
         self.read1_file.close()
         self.read2_file.close()
 
+    def __enter__(self):
+        """Support for context manager."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Close files when exiting context."""
+        self.close()
+
 
 import gzip
 from typing import Tuple, Iterator

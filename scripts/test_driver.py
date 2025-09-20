@@ -45,13 +45,10 @@ def discover_libraries(run_dir: Path, sample_prefix: str = "DB") -> dict[str, di
             if k.startswith(sample_prefix) and None not in v.values()}
 
 
-def build_parser(config_path: Path, r1: Path, r2: Path) -> ReadParser:
-    """Instantiate ReadParser exactly like the CLI does."""
-    return ReadParser.from_cli(
-        config_path=config_path,
-        r1_path=r1,
-        r2_path=r2,
-    )
+def build_parser(config_path: Path) -> ReadParser:
+    """Instantiate ReadParser using the standard constructor."""
+    cfg = yaml.safe_load(config_path.read_text())
+    return ReadParser(cfg, cfg.get("params", {}))
 
 # --------------------------------------------------------------------------- #
 # Main
@@ -74,15 +71,15 @@ def main(argv: list[str] | None = None) -> None:
     r1, r2 = libs[key]["R1"], libs[key]["R2"]
     print(f"⇢ Testing parser on {key}\n   R1={r1.name}\n   R2={r2.name}")
 
-    parser = build_parser(args.config, r1, r2)
+    parser = build_parser(args.config)
 
     results = []
     with FastqReader(r1, r2) as reader:
-        for idx, (rec1, rec2) in enumerate(reader, 1):
+        for idx, read_pair in enumerate(reader, 1):
             if idx > args.max_reads:
                 break
 
-            ctx = parser.parse(rec1, rec2)
+            ctx = parser.parse(*read_pair)
             if ctx and ctx.get("status") == "ok":
                 results.append(ctx)
 

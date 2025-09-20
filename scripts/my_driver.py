@@ -23,7 +23,7 @@ def discover(run_dir: Path, prefix: str) -> dict[str, dict[str, Path]]:
 
 def build_parser(cfg_path: Path) -> ReadParser:
     cfg = yaml.safe_load(cfg_path.read_text())
-    return ReadParser(cfg, cfg["params"])
+    return ReadParser(cfg, cfg.get("params", {}))
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()

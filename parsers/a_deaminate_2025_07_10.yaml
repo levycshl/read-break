@@ -1,0 +1,117 @@
+# part of systematic a-demanimation program
+# parser for a_deaminate_2025_07_10
+# Tested the efficacy of A deaminase 
+# on templates with methyl-A (meA) modifications.
+params:
+  copy_tag_len: 15
+  template_tag_len: 15
+  repeat_len: 15
+  max_repeat_len: 30
+  r1_wobble: 4
+  r2_wobble: 4
+  r1_seq1: "AGCCAGGAGACAGAGC"
+  r1_seq2: "TCATGTTTAACGCAGGTGAA"
+  r1_seq3: "AGATGCTGAAGATCAGTTGG"
+  r2_seq1: "GTTGCTTGGTGCTGGT"
+  r2_seq2: "CCAACTGATCTTCAGCATCT"
+  r2_seq3: "TTCACCTGCGTTAAACATGAGCTCTGTCTCCTGGCT"
+  r1_seq1_len: "{{ params.r1_seq1 | length }}"
+  r1_seq2_len: "{{ params.r1_seq2 | length }}"
+  r1_seq3_len: "{{ params.r1_seq3 | length }}"
+  r2_seq1_len: "{{ params.r2_seq1 | length }}"
+  r2_seq2_len: "{{ params.r2_seq2 | length }}"
+  r2_seq3_len: "{{ params.r2_seq3 | length }}"
+
+  
+## shape of read 1:
+## wobble - copy_tag - r1_seq1 - r1_seq2 - 
+##    -- T(repeat_len) - r1_seq3 - template_tag
+# shape of read 2:
+## wobble - r2_seq1 - template_tag - r2_seq2 - 
+##    -- A(repeat_len) - r2_seq3 - copy_tag
+
+
+pipeline:
+  ## get all the start positions for the sequences in read 1
+  - id: match_start_of_r1
+    description: Match the start of Read 1 to account for wobble
+    read: 1
+    op: match
+    ref: "{{ params.r1_seq1 }}"
+    hamming_fn: hammingTC
+    max_wobble: "{{ params.r1_wobble }}"
+    max_mismatch: 1
+    base_offset: "{{params.copy_tag_len}}"
+    store_pos_as: s1_start
+    must_pass: true
+
+  - id: test_match_r1_seq2
+    read: 1
+    op: hamming_test
+    description: Check if read1 sequence matches left of repeat
+    ref: "{{ params.r1_seq2 }}"
+    hamming_fn: hammingTC
+    max_mismatch: 1
+    start: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len }}"
+    length: "{{ params.r1_seq2_len }}"
+    store_result_as: r1_seq2_match
+    must_pass: true
+
+  - id: find_far_flank_r1_seq3
+    description: Find the far flank of the repeat in Read 1 using sequence 3
+    read: 1
+    op: match
+    ref: "{{ params.r1_seq3 }}"
+    hamming_fn: hammingTC
+    max_wobble: "{{ params.max_repeat_len }}"
+    max_mismatch: 1
+    base_offset: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len + params.r1_seq2_len }}"
+    length: "{{ params.r1_seq3_len }}"
+    store_pos_as: repeat_len_r1
+    must_pass: true
+
+    ## use those positions to extract sequences
+  - id: extract_copy_tag_r1
+    description: Extract copy tag from Read 1
+    read: 1
+    op: extract
+    start: "{{ s1_start}}"
+    length: "{{ params.copy_tag_len }}"
+    store_seq_as: copy_tag_r1
+    must_pass: true
+
+  - id: extract_left_block_r1
+    description: Extract left common block from read 1
+    read: 1
+    op: extract
+    start: "{{ s1_start + params.copy_tag_len}}"
+    length: "{{ params.r1_seq1_len + params.r1_seq2_len }}"
+    store_seq_as: left_block_r1
+    must_pass: true
+
+  - id: extract_repeat_r1
+    description: Extract repeat region from Read 1
+    read: 1
+    op: extract
+    start: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len + params.r1_seq2_len }}"
+    length: "{{ repeat_len_r1 }}"
+    store_seq_as: repeat_r1
+    must_pass: false
+
+  - id: extract_right_block_r1
+    description: Extract right common block from Read 1
+    read: 1
+    op: extract
+    start: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len + params.r1_seq2_len + repeat_len_r1 }}"
+    length: "{{ params.r1_seq3_len}}"
+    store_seq_as: right_block_r1
+    must_pass: false
+  
+  - id: extract_template_tag_r1
+    description: Extract template tag from Read 1
+    read: 1
+    op: extract
+    start: "{{ s1_start + params.copy_tag_len + params.r1_seq1_len + params.r1_seq2_len + repeat_len_r1 + params.r1_seq3_len }}"
+    length: "{{ params.template_tag_len }}"
+    store_seq_as: template_tag_r1
+    must_pass: false

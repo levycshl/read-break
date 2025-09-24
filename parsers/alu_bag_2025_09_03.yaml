@@ -1,0 +1,185 @@
+# parsers/template_copy_extract.yaml
+# Purpose: Identify well-formed templates and extract:
+#   - R1: template_tag (V12, no T) and DNA insert
+#   - R2: copy_tag (B15, no A) and DNA insert
+# Robustness: allows the explicit variable-length prefixes at the 5' ends
+# Conversion-aware matching: R1 uses hammingTC (T→C-blind), R2 uses hammingAG (A→G-blind)
+
+params:
+  # ---- Constants from your design ----
+  # Variable-length prefixes at 5' ends:
+  # R1: "" | A | TG | GAC  (lengths 0,1,2,3) then N15, then const1
+  # R2: "" | G | CA | TGT  (lengths 0,1,2,3) then const0
+  r1_prefix_max_wobble: 3         # accounts for "", A, TG, GAC
+  r2_prefix_max_wobble: 3         # accounts for "", G, CA, TGT
+
+  r1_n_len: 15                    # R1 N(15) after prefix
+
+  # R1 constants & lengths
+  r1_const1: "AGCCAGGAGACAGAGC"   # immediately after prefix+N15
+  r1_const1_len: 16
+  r1_tag_len: 12                  # V(12), no T
+  r1_const2: "GTATCAACGCAGAGTCATG"
+  r1_const2_len: 19
+
+  # R2 constants & lengths
+  r2_const0: "GTTGCTTGGTGCTGGT"   # immediately after prefix
+  r2_const0_len: 16
+  r2_tag_len: 15                  # B(15), no A
+  r2_const1: "GCCACTGCACTCCAGCCTGGGCGACAGAGC"
+  r2_const1_len: 30
+
+  # Extract-to-end padding for 'extract' (overshoot is safe in Python slicing)
+  big_len: 1000000
+
+pipeline:
+
+  # ---------- READ 1 ----------
+  # Find R1 const1 allowing for prefix (0..3 bp) + N(15) and T→C asymmetry.
+  - id: r1_match_const1
+    read: 1
+    op: match
+    ref: "{{ params.r1_const1 }}"
+    hamming_fn: "hammingTC"             # T→C-blind
+    max_mismatch: 0
+    base_offset: "{{ params.r1_n_len }}" # start search after N15
+    max_wobble: "{{ params.r1_prefix_max_wobble }}"
+    store_pos_as: r1_const1_pos
+    must_pass: true
+
+  # Sanity-check the segment equals const1 under asymmetric test
+  - id: r1_verify_const1
+    read: 1
+    op: hamming_test
+    ref: "{{ params.r1_const1 }}"
+    hamming_fn: "hammingTC"
+    max_mismatch: 0
+    start: "{{ r1_const1_pos }}"
+    length: "{{ params.r1_const1_len }}"
+    store_result_as: r1_const1_ok
+    must_pass: true
+
+  # Extract the template tag immediately after const1 (V12, no T)
+  - id: r1_extract_template_tag
+    read: 1
+    op: extract
+    start: "{{ r1_const1_pos + params.r1_const1_len }}"
+    length: "{{ params.r1_tag_len }}"
+    store_seq_as: template_tag
+
+  - id: r1_template_tag_no_T
+    op: test
+    expression: "{{ 'T' not in template_tag }}"
+    store_result_as: template_tag_not_contains_T
+    must_pass: true
+
+  # Match the downstream const2 exactly after the tag (again T→C-blind)
+  - id: r1_match_const2
+    read: 1
+    op: match
+    ref: "{{ params.r1_const2 }}"
+    hamming_fn: "hammingTC"
+    max_mismatch: 0
+    base_offset: "{{ r1_const1_pos + params.r1_const1_len + params.r1_tag_len }}"
+    max_wobble: 0
+    store_pos_as: r1_const2_pos
+    must_pass: true
+
+  - id: r1_verify_const2
+    read: 1
+    op: hamming_test
+    ref: "{{ params.r1_const2 }}"
+    hamming_fn: "hammingTC"
+    max_mismatch: 0
+    start: "{{ r1_const2_pos }}"
+    length: "{{ params.r1_const2_len }}"
+    store_result_as: r1_const2_ok
+    must_pass: true
+
+  # Extract R1 DNA insert: from end of const2 to end of read
+  - id: r1_extract_insert
+    read: 1
+    op: extract
+    start: "{{ r1_const2_pos + params.r1_const2_len }}"
+    length: "{{ params.big_len }}"
+    store_seq_as: r1_insert
+
+  # ---------- READ 2 ----------
+  # Find R2 const0 allowing for prefix (0..3 bp) and A→G asymmetry.
+  - id: r2_match_const0
+    read: 2
+    op: match
+    ref: "{{ params.r2_const0 }}"
+    hamming_fn: "hammingAG"             # A→G-blind
+    max_mismatch: 0
+    base_offset: 0
+    max_wobble: "{{ params.r2_prefix_max_wobble }}"
+    store_pos_as: r2_const0_pos
+    must_pass: true
+
+  - id: r2_verify_const0
+    read: 2
+    op: hamming_test
+    ref: "{{ params.r2_const0 }}"
+    hamming_fn: "hammingAG"
+    max_mismatch: 0
+    start: "{{ r2_const0_pos }}"
+    length: "{{ params.r2_const0_len }}"
+    store_result_as: r2_const0_ok
+    must_pass: true
+
+  # Extract the copy tag immediately after const0 (B15, no A)
+  - id: r2_extract_copy_tag
+    read: 2
+    op: extract
+    start: "{{ r2_const0_pos + params.r2_const0_len }}"
+    length: "{{ params.r2_tag_len }}"
+    store_seq_as: copy_tag
+
+  - id: r2_copy_tag_no_A
+    op: test
+    expression: "{{ 'A' not in copy_tag }}"
+    store_result_as: copy_tag_not_contains_A
+    must_pass: true
+
+  # Match the downstream const1 right after the tag (A→G-blind)
+  - id: r2_match_const1
+    read: 2
+    op: match
+    ref: "{{ params.r2_const1 }}"
+    hamming_fn: "hammingAG"
+    max_mismatch: 0
+    base_offset: "{{ r2_const0_pos + params.r2_const0_len + params.r2_tag_len }}"
+    max_wobble: 0
+    store_pos_as: r2_const1_pos
+    must_pass: true
+
+  - id: r2_verify_const1
+    read: 2
+    op: hamming_test
+    ref: "{{ params.r2_const1 }}"
+    hamming_fn: "hammingAG"
+    max_mismatch: 0
+    start: "{{ r2_const1_pos }}"
+    length: "{{ params.r2_const1_len }}"
+    store_result_as: r2_const1_ok
+    must_pass: true
+
+  # Extract R2 DNA insert: from end of const1 to end of read
+  - id: r2_extract_insert
+    read: 2
+    op: extract
+    start: "{{ r2_const1_pos + params.r2_const1_len }}"
+    length: "{{ params.big_len }}"
+    store_seq_as: r2_insert
+
+  # ---------- FINAL WELL-FORMEDNESS GATE ----------
+  - id: final_well_formed
+    op: test
+    expression: >
+      {{ r1_const1_ok and r1_const2_ok and
+         template_tag_not_contains_T and
+         r2_const0_ok and r2_const1_ok and
+         copy_tag_not_contains_A }}
+    store_result_as: well_formed
+    must_pass: true

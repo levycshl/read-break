@@ -1,5 +1,6 @@
 # read_break/parser.py
 
+import time
 import yaml
 import jinja2
 from typing import Dict, Any, Optional, Callable
@@ -433,7 +434,9 @@ def read_clip_and_write(
     default_end_r1:   int = -1,
     default_start_r2: int = 0,
     default_end_r2:   int = -1,
-    default_read_tag: str = ""
+    default_read_tag: str = "",
+    verbose: bool = False,
+    verbose_interval: int = 10000,
 ) -> None:
     """
     Iterate through `reader`; parse each pair; trim, tag, and write.
@@ -444,17 +447,23 @@ def read_clip_and_write(
 
     An end position of -1 (or None) means "slice to end of read".
     """
+    all_reads = 0
+    good_reads = 0
+    start_time = time.time()
     for read_id, seq1, qual1, seq2, qual2 in reader:
+        if verbose and (all_reads % verbose_interval == 0):
+            elapsed_time = time.time() - start_time
+            print(f"Processed {all_reads} reads; {good_reads} passed; time elapsed: {elapsed_time:.1f}s")
+        all_reads += 1
         ctx = parser.parse(read_id, seq1, qual1, seq2, qual2)
         if not ctx or ctx.get("status") != "ok":
             continue
-
+        good_reads += 1
         s1 = ctx.get("start_r1", default_start_r1)
         e1 = ctx.get("end_r1",   default_end_r1)
         s2 = ctx.get("start_r2", default_start_r2)
         e2 = ctx.get("end_r2",   default_end_r2)
         tag = ctx.get("read_tag", default_read_tag)
-
         # -1 or None means to the end of the read
         e1 = len(seq1) if (e1 is None or e1 == -1) else e1
         e2 = len(seq2) if (e2 is None or e2 == -1) else e2
@@ -466,5 +475,4 @@ def read_clip_and_write(
 
         new_id = f"{read_id}/1_{tag}" if tag else f"{read_id}/1"
         writer.write(
-            (new_id, trimmed_seq1, trimmed_qual1, trimmed_seq2, trimmed_qual2)
-        )
+            (new_id, trimmed_seq1, trimmed_qual1, trimmed_seq2, trimmed_qual2))        

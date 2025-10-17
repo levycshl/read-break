@@ -4,4 +4,7 @@ notebooks/parsed_output/DB3_S5.parquet
 notebooks/parsed_output/DB4_S6.parquet
 notebooks/parsed_output/DB5_S7.parquet
 notebooks/parsed_output/DB6_S8.parquet
+data/*
 src/read_break/__pycache__/
+src/read_break/*
+data_2025_10_17
